@@ -30,18 +30,16 @@ CREATE TABLE IF NOT EXISTS ratings (
   UNIQUE(session_id)
 );
 
--- Create notifications table
-CREATE TABLE IF NOT EXISTS notifications (
+-- Create ratings/reviews table
+CREATE TABLE IF NOT EXISTS ratings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type VARCHAR(50) NOT NULL,
-  title VARCHAR(200),
-  message TEXT,
-  related_id UUID,
-  is_read BOOLEAN DEFAULT FALSE,
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  mentor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+  review TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
-  INDEX (user_id, is_read),
-  INDEX (created_at DESC)
+  UNIQUE(session_id)
 );
 
 -- Create session_feedback table

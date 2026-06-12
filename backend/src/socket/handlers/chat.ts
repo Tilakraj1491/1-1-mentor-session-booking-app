@@ -1,10 +1,27 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { query } from '@/database';
+import { query, queryOne } from '@/database';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function handleMessageSend(socket: Socket, io: SocketIOServer, data: any) {
   try {
-    const { sessionId, content, type = 'text', userId } = data;
+    const { sessionId, content, type = 'text' } = data;
+    const userId = socket.data.userId; // Use authenticated userId from socket
+    
+    if (!sessionId || !userId) {
+      return;
+    }
+
+    // Verify user is part of this session before allowing message sending
+    const session = await queryOne(
+      'SELECT mentor_id, student_id FROM sessions WHERE id = $1',
+      [sessionId]
+    );
+
+    if (!session || (session.mentor_id !== userId && session.student_id !== userId)) {
+      console.warn(`⚠️ Unauthorized message attempt by user ${userId} for session ${sessionId}`);
+      socket.emit('error', { message: 'Unauthorized' });
+      return;
+    }
     
     console.log('📨 Message received:', { sessionId, content, type, userId, socketId: socket.id });
     
@@ -47,10 +64,37 @@ export async function handleMessageSend(socket: Socket, io: SocketIOServer, data
 
 export async function handleSessionJoin(socket: Socket, io: SocketIOServer, data: any) {
   try {
-    const { sessionId, userId, userName } = data;
+    const { sessionId } = data;
+    const userId = socket.data.userId; // Use authenticated userId from socket
+    const userName = socket.data.user?.name || data.userName;
     
-    console.log('🚪 User joining session:', { sessionId, userId, userName, socketId: socket.id });
+    if (!sessionId || !userId) {
+      console.warn('⚠️ Join session attempt with missing data:', { sessionId, userId });
+      return;
+    }
+
+    console.log('🚪 User attempting to join session:', { sessionId, userId, userName, socketId: socket.id });
     
+    // Verify authorization: check if user is mentor or student for this session
+    const session = await queryOne(
+      'SELECT mentor_id, student_id FROM sessions WHERE id = $1',
+      [sessionId]
+    );
+
+    if (!session) {
+      console.error(`❌ Session ${sessionId} not found`);
+      socket.emit('error', { message: 'Session not found' });
+      return;
+    }
+
+    const isAuthorized = session.mentor_id === userId || session.student_id === userId;
+
+    if (!isAuthorized) {
+      console.error(`❌ Unauthorized join attempt: User ${userId} for session ${sessionId}`);
+      socket.emit('error', { message: 'Unauthorized to join this session' });
+      return;
+    }
+
     socket.join(`session:${sessionId}`);
     
     // Log room members after joining
@@ -67,6 +111,7 @@ export async function handleSessionJoin(socket: Socket, io: SocketIOServer, data
     console.log(`✅ User ${userId} joined session ${sessionId}`);
   } catch (err) {
     console.error('Session join error:', err);
+    socket.emit('error', { message: 'Failed to join session' });
   }
 }
 

@@ -3,8 +3,11 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 export async function handleVideoInitiate(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, initiatorId, receiverId } = data;
+    const roomName = `session:${sessionId}`;
     
-    io.to(`session:${sessionId}`).emit('video:incoming-call', {
+    if (!socket.rooms.has(roomName)) return;
+
+    io.to(roomName).emit('video:incoming-call', {
       initiatorId,
       receiverId,
       timestamp: Date.now(),
@@ -17,10 +20,14 @@ export async function handleVideoInitiate(socket: Socket, io: SocketIOServer, da
 export async function handleVideoConnectionRequest(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, userId, targetUserId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
+
     console.log('🔄 Video connection request received:', { sessionId, userId, targetUserId });
     
     // Forward the connection request to the target user
-    io.to(`session:${sessionId}`).emit('video:connection-request', {
+    io.to(roomName).emit('video:connection-request', {
       sessionId,
       userId,
       targetUserId,
@@ -33,6 +40,9 @@ export async function handleVideoConnectionRequest(socket: Socket, io: SocketIOS
 export async function handleVideoOffer(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, peerId, offer, remoteUserId, initiatorId, callerId, targetId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     console.log('📨 Video offer received:', {
       sessionId,
@@ -45,12 +55,8 @@ export async function handleVideoOffer(socket: Socket, io: SocketIOServer, data:
       offerType: offer?.type
     });
     
-    // Check room members
-    const room = io.sockets.adapter.rooms.get(`session:${sessionId}`);
-    console.log('👥 Room members when video offer received:', room ? Array.from(room) : 'No members');
-    
     // Broadcast offer to session, preserving user IDs (callerId, targetId)
-    socket.to(`session:${sessionId}`).emit('video:offer', {
+    socket.to(roomName).emit('video:offer', {
       peerId: peerId || socket.id, // Use provided peerId or fallback to socket.id
       offer,
       callerId: callerId || socket.id, // Preserve user ID of offer sender
@@ -60,7 +66,7 @@ export async function handleVideoOffer(socket: Socket, io: SocketIOServer, data:
       timestamp: Date.now(),
     });
     
-    console.log(`📤 Video offer forwarded in session ${sessionId} to ${room ? room.size - 1 : 0} other users`);
+    console.log(`📤 Video offer forwarded in session ${sessionId}`);
   } catch (err) {
     console.error('Video offer error:', err);
   }
@@ -69,6 +75,9 @@ export async function handleVideoOffer(socket: Socket, io: SocketIOServer, data:
 export async function handleVideoAnswer(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, peerId, answer, initiatorId, callerId, targetId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     console.log('📨 Video answer received:', {
       sessionId,
@@ -80,7 +89,7 @@ export async function handleVideoAnswer(socket: Socket, io: SocketIOServer, data
     });
     
     // Broadcast answer to session, preserving user IDs (callerId, targetId)
-    socket.to(`session:${sessionId}`).emit('video:answer', {
+    socket.to(roomName).emit('video:answer', {
       peerId: peerId || socket.id, // Use provided peerId or fallback to socket.id
       answer,
       callerId: callerId || socket.id, // Preserve user ID of answer sender
@@ -98,9 +107,12 @@ export async function handleVideoAnswer(socket: Socket, io: SocketIOServer, data
 export async function handleICECandidate(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, peerId, candidate, callerId, targetId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     // Broadcast ICE candidate to session, preserving user IDs
-    socket.to(`session:${sessionId}`).emit('video:ice-candidate', {
+    socket.to(roomName).emit('video:ice-candidate', {
       peerId: peerId || socket.id, // Use provided peerId or fallback to socket.id
       candidate,
       callerId: callerId || peerId || socket.id, // Preserve user ID of candidate sender
@@ -127,15 +139,14 @@ export async function handleVideoEnd(socket: Socket, io: SocketIOServer) {
 export async function handleScreenStarted(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, userId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     console.log('🖥️ Screen share started:', { sessionId, userId, socketId: socket.id });
     
-    // Check if user is in the session room
-    const room = io.sockets.adapter.rooms.get(`session:${sessionId}`);
-    console.log('👥 Current room members for screen share:', room ? Array.from(room) : 'No members');
-    
     // Broadcast screen share started event to session
-    socket.to(`session:${sessionId}`).emit('screen:started', {
+    socket.to(roomName).emit('screen:started', {
       userId,
       socketId: socket.id,
       timestamp: Date.now(),
@@ -150,11 +161,14 @@ export async function handleScreenStarted(socket: Socket, io: SocketIOServer, da
 export async function handleScreenStopped(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, userId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     console.log('🛑 Screen share stopped:', { sessionId, userId, socketId: socket.id });
     
     // Broadcast screen share stopped event to session
-    socket.to(`session:${sessionId}`).emit('screen:stopped', {
+    socket.to(roomName).emit('screen:stopped', {
       userId,
       socketId: socket.id,
       timestamp: Date.now(),
@@ -169,9 +183,12 @@ export async function handleScreenStopped(socket: Socket, io: SocketIOServer, da
 export async function handleScreenOffer(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, offer, initiatorId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     // Broadcast screen offer to session
-    socket.to(`session:${sessionId}`).emit('screen:offer', {
+    socket.to(roomName).emit('screen:offer', {
       peerId: socket.id,
       offer,
       initiatorId: initiatorId || socket.id,
@@ -187,9 +204,12 @@ export async function handleScreenOffer(socket: Socket, io: SocketIOServer, data
 export async function handleScreenAnswer(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, answer, initiatorId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     // Broadcast screen answer to session
-    socket.to(`session:${sessionId}`).emit('screen:answer', {
+    socket.to(roomName).emit('screen:answer', {
       peerId: socket.id,
       answer,
       initiatorId: initiatorId || socket.id,
@@ -205,9 +225,12 @@ export async function handleScreenAnswer(socket: Socket, io: SocketIOServer, dat
 export async function handleScreenICECandidate(socket: Socket, io: SocketIOServer, data: any) {
   try {
     const { sessionId, candidate, initiatorId } = data;
+    const roomName = `session:${sessionId}`;
+    
+    if (!socket.rooms.has(roomName)) return;
     
     // Broadcast screen ICE candidate to session
-    socket.to(`session:${sessionId}`).emit('screen:ice-candidate', {
+    socket.to(roomName).emit('screen:ice-candidate', {
       peerId: socket.id,
       candidate,
       initiatorId: initiatorId || socket.id,

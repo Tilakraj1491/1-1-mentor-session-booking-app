@@ -11,6 +11,8 @@ export interface User {
   verified: boolean;
   created_at: string;
   updated_at: string;
+  avg_rating?: number;
+  total_sessions?: number;
 }
 
 export interface UserProfile extends User {
